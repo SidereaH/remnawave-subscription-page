@@ -15,10 +15,10 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
+import { CustomTemplateInjectorService } from './custom-template-injector.service';
 import { SubpageConfigService } from './subpage-config.service';
 
-import { parseArrayResponse, hasStopWordInRemarks } from '@common/utils/json/parse-json';
-import { getFirstUserIdFromVnext, replaceUuidPlaceholder } from '@common/utils/auto-balancer/process-uuid-from-subscription';
+import { parseArrayResponse } from '@common/utils/json/parse-json';
 @Injectable()
 export class RootService {
     private readonly logger = new Logger(RootService.name);
@@ -30,6 +30,7 @@ export class RootService {
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
         private readonly axiosService: AxiosService,
+        private readonly customTemplateInjectorService: CustomTemplateInjectorService,
         private readonly subpageConfigService: SubpageConfigService,
     ) {
         this.isMarzbanLegacyLinkEnabled = this.configService.getOrThrow<boolean>(
@@ -118,42 +119,20 @@ export class RootService {
                         res.setHeader(key, value);
                     });
             }
-            //все что ниже потом перенести в отдельный файлик
-            //response ремнавейва не имеет определенного типа, тупой json, который мы можем модифицировать и отправить прямо в клиент
-            
-            //парсим ответик
-            let arr;
-            try{
-               arr = parseArrayResponse(subscriptionDataResponse.response);
-            } catch(e){
-                this.logger.error('Неожиданный формат Json', e);
-            }
-
-            const first = arr!![0];
-            //получаем айди юзера для подставновки в шаблон
-            const foundId = getFirstUserIdFromVnext(first);
-
-            // TODO: Хаваем шаблон из конфига, прокинув в докер, подставляем его. Также детальная настройка через .yml конфиг, где прописаны все варианты действий при разных статусах подписки
-            
-            
-            const stopWords = ["limited", "Лимит", "Достигнут"]; //стоп-слова, по которым определяем статус подписки, ищем в remarks. 
-            //TODO: брать это все из .yml
-
-            if (hasStopWordInRemarks(arr!!, stopWords)) {
-                res.send(JSON.stringify(arr));
+            let parsedSubscription: unknown[];
+            try {
+                parsedSubscription = parseArrayResponse(subscriptionDataResponse.response);
+            } catch (error) {
+                this.logger.error('Subscription response is not a JSON array, returning original');
+                this.logger.error(error);
+                res.status(200).send(subscriptionDataResponse.response);
                 return;
             }
-            //вставляем наш шаблон из конфига
-            const insertsArr = parseArrayResponse(listToInsert); 
 
-            //заменяем все <UUID> на id
-            //templateObj берем из конфига .yml
-            //содержимое прокидывается
-            const filledTemplate = replaceUuidPlaceholder(templateObj, foundId!!);
-            //вставляем заполненный шаблон
-            const outArr = [filledTemplate, ...arr!!];
-            res.status(200).send(JSON.stringify(outArr));
-            // res.status(200).send(subscriptionDataResponse.response);
+            const responseWithTemplates =
+                this.customTemplateInjectorService.injectTemplates(parsedSubscription);
+
+            res.status(200).send(JSON.stringify(responseWithTemplates));
         } catch (error) {
             this.logger.error('Error in serveSubscriptionPage', error);
 
