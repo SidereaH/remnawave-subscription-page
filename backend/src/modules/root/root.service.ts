@@ -132,7 +132,13 @@ export class RootService {
             const responseWithTemplates =
                 this.customTemplateInjectorService.injectTemplates(parsedSubscription);
 
-            res.status(200).send(JSON.stringify(responseWithTemplates));
+            const responseBody = JSON.stringify(responseWithTemplates);
+            // Override upstream cache validators so clients revalidate against the final payload.
+            res.removeHeader('etag');
+            res.removeHeader('last-modified');
+            const etag = createHash('sha256').update(responseBody).digest('hex');
+            res.setHeader('ETag', `"${etag}"`);
+            res.status(200).send(responseBody);
         } catch (error) {
             this.logger.error('Error in serveSubscriptionPage', error);
 
