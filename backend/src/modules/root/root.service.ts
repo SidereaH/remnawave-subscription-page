@@ -123,8 +123,8 @@ export class RootService {
             try {
                 parsedSubscription = parseArrayResponse(subscriptionDataResponse.response);
             } catch (error) {
-                this.logger.error('Subscription response is not a JSON array, returning original');
-                this.logger.error(error);
+                this.logger.warn('Subscription response is not a JSON array, returning original');
+                // this.logger.warn(error);
                 res.status(200).send(subscriptionDataResponse.response);
                 return;
             }
