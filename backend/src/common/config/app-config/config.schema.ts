@@ -28,6 +28,12 @@ export const configSchema = z
             .transform((val) => val === 'true'),
         MARZBAN_LEGACY_SECRET_KEY: z.optional(z.string()),
         MARZBAN_LEGACY_SUBSCRIPTION_VALID_FROM: z.optional(z.string()),
+
+        CUSTOM_TEMPLATES_ENABLED: z
+            .string()
+            .default('false')
+            .transform((val) => val === 'true'),
+        CUSTOM_TEMPLATES_CONFIG_PATH: z.string().default('/opt/app/templates/template-injector.yml'),
         INTERNAL_JWT_SECRET: z.string(),
     })
     .superRefine((data, ctx) => {

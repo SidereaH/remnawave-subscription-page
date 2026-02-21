@@ -1,17 +1,22 @@
 services:
   remnawave-subscription-page:
-    image: remnawave/subscription-page:latest
+    image: aliquamsiderea/remnawave-subscription-page-templates:1.0.0
     container_name: remnawave-subscription-page
     hostname: remnawave-subscription-page
     restart: always
     env_file:
       - .env
+    volumes:
+      - ./lte-template.txt:/opt/app/templates/lte-template.txt:ro
+      - ./wifi-template.txt:/opt/app/templates/wifi-template.txt:ro
+      - ./template-injector.yml:/opt/app/templates/template-injector.yml:ro    
     ports:
       - '127.0.0.1:3010:3010'
     networks:
       - remnawave-network
 
 networks:
-  remnawave-network:
-    driver: bridge
-    external: true
+    remnawave-network:
+        name: remnawave-network
+        driver: bridge
+        external: false

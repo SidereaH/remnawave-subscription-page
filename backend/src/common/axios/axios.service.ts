@@ -274,7 +274,7 @@ export class AxiosService implements OnModuleInit {
             return { isOk: false };
         }
     }
-
+    //запрос на ремнавейв 
     public async getSubscription(
         clientIp: string,
         shortUuid: string,
@@ -310,6 +310,8 @@ export class AxiosService implements OnModuleInit {
                     [REMNAWAVE_REAL_IP_HEADER]: clientIp,
                 },
             });
+
+            //здесь мы получаем ответ от ремны сырым
 
             return {
                 response: response.data,

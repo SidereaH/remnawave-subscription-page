@@ -15,8 +15,10 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
+import { CustomTemplateInjectorService } from './custom-template-injector.service';
 import { SubpageConfigService } from './subpage-config.service';
 
+import { parseArrayResponse } from '@common/utils/json/parse-json';
 @Injectable()
 export class RootService {
     private readonly logger = new Logger(RootService.name);
@@ -28,6 +30,7 @@ export class RootService {
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
         private readonly axiosService: AxiosService,
+        private readonly customTemplateInjectorService: CustomTemplateInjectorService,
         private readonly subpageConfigService: SubpageConfigService,
     ) {
         this.isMarzbanLegacyLinkEnabled = this.configService.getOrThrow<boolean>(
@@ -95,7 +98,7 @@ export class RootService {
                 response: unknown;
                 headers: RawAxiosResponseHeaders | AxiosResponseHeaders;
             } | null = null;
-
+            //здесь мы получаем и отправляем нашу подписку
             subscriptionDataResponse = await this.axiosService.getSubscription(
                 clientIp,
                 shortUuidLocal,
@@ -116,8 +119,26 @@ export class RootService {
                         res.setHeader(key, value);
                     });
             }
+            let parsedSubscription: unknown[];
+            try {
+                parsedSubscription = parseArrayResponse(subscriptionDataResponse.response);
+            } catch (error) {
+                this.logger.warn('Subscription response is not a JSON array, returning original');
+                // this.logger.warn(error);
+                res.status(200).send(subscriptionDataResponse.response);
+                return;
+            }
 
-            res.status(200).send(subscriptionDataResponse.response);
+            const responseWithTemplates =
+                this.customTemplateInjectorService.injectTemplates(parsedSubscription);
+
+            const responseBody = JSON.stringify(responseWithTemplates);
+            // Override upstream cache validators so clients revalidate against the final payload.
+            res.removeHeader('etag');
+            res.removeHeader('last-modified');
+            const etag = createHash('sha256').update(responseBody).digest('hex');
+            res.setHeader('ETag', `"${etag}"`);
+            res.status(200).send(responseBody);
         } catch (error) {
             this.logger.error('Error in serveSubscriptionPage', error);
 

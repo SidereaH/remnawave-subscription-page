@@ -6,7 +6,7 @@ export async function getStartMessage() {
 
     return table([['Docs → https://docs.rw\nCommunity → https://t.me/remnawave']], {
         header: {
-            content: `Remnawave Subscription Page v${pkg.version}`,
+            content: `Remnawave Subscription Page v${pkg.version} by Siderea`,
             alignment: 'center',
         },
         columnDefault: {
