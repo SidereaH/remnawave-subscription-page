@@ -16,6 +16,7 @@ services:
       - remnawave-network
 
 networks:
-  remnawave-network:
-    driver: bridge
-    external: false
+    remnawave-network:
+        name: remnawave-network
+        driver: bridge
+        external: false
