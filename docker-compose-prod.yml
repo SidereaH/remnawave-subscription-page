@@ -7,9 +7,9 @@ services:
     env_file:
       - .env
     volumes:
-      - ./backend/lte-template.txt:/opt/app/templates/lte-template.txt:ro
-      - ./backend/wifi-template.txt:/opt/app/templates/wifi-template.txt:ro
-      - ./backend/template-injector.yml:/opt/app/templates/template-injector.yml:ro    
+      - ./lte-template.txt:/opt/app/templates/lte-template.txt:ro
+      - ./wifi-template.txt:/opt/app/templates/wifi-template.txt:ro
+      - ./template-injector.yml:/opt/app/templates/template-injector.yml:ro    
     ports:
       - '127.0.0.1:3010:3010'
     networks:
@@ -18,4 +18,4 @@ services:
 networks:
   remnawave-network:
     driver: bridge
-    external: true
+    external: false
