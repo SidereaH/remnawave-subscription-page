@@ -1,11 +1,11 @@
-import fs from 'node:fs';
 import yaml from 'js-yaml';
+import fs from 'node:fs';
 
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
-    getFirstUserIdFromVnext,
+    getUserId,
     replaceUuidPlaceholder,
 } from '@common/utils/auto-balancer/process-uuid-from-subscription';
 
@@ -45,7 +45,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
-    return value.filter((item): item is string => typeof item === 'string').map((item) => item.trim());
+    return value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim());
 }
 
 function toLowerCaseArray(value: unknown): string[] {
@@ -88,7 +90,7 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
             return subscriptionItems;
         }
 
-        const userId = this.getUserId(subscriptionItems);
+        const userId = getUserId(subscriptionItems);
         if (!userId) {
             this.logger.warn(
                 'Cannot inject templates: user UUID is not found in subscription response',
@@ -110,7 +112,7 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
                 this.logger.warn(`Template "${templateName}" is not loaded, skip`);
                 continue;
             }
-
+            //добавляем шаблоны в массив
             preparedTemplates.push(replaceUuidPlaceholder(templateObject, userId));
         }
 
@@ -186,15 +188,6 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
         return remarks;
     }
 
-    private getUserId(subscriptionItems: unknown[]): string | undefined {
-        for (const item of subscriptionItems) {
-            const userId = getFirstUserIdFromVnext(item);
-            if (userId) return userId;
-        }
-
-        return undefined;
-    }
-
     private loadConfig(): TLoadedInjectorConfig | null {
         try {
             const rawConfigBody = fs.readFileSync(this.configPath, 'utf8');
@@ -217,7 +210,10 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
 
             const loadedTemplates: Record<string, unknown> = {};
             for (const [templateName, templatePathValue] of Object.entries(templatesSection)) {
-                if (typeof templatePathValue !== 'string' || templatePathValue.trim().length === 0) {
+                if (
+                    typeof templatePathValue !== 'string' ||
+                    templatePathValue.trim().length === 0
+                ) {
                     this.logger.warn(`Template path for "${templateName}" is invalid, skip`);
                     continue;
                 }

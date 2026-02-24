@@ -11,14 +11,18 @@ import { Logger } from '@nestjs/common';
 
 import { TRequestTemplateTypeKeys } from '@remnawave/backend-contract';
 
+import {
+    containsPlaceHolderFromVnext,
+    getUserId,
+    replaceUuidPlaceholder,
+} from '@common/utils/auto-balancer';
+import { parseArrayResponse } from '@common/utils/json/parse-json';
 import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
 import { CustomTemplateInjectorService } from './custom-template-injector.service';
 import { SubpageConfigService } from './subpage-config.service';
-
-import { parseArrayResponse } from '@common/utils/json/parse-json';
 @Injectable()
 export class RootService {
     private readonly logger = new Logger(RootService.name);
@@ -122,15 +126,28 @@ export class RootService {
             let parsedSubscription: unknown[];
             try {
                 parsedSubscription = parseArrayResponse(subscriptionDataResponse.response);
-            } catch (error) {
+            } catch {
                 this.logger.warn('Subscription response is not a JSON array, returning original');
-                // this.logger.warn(error);
                 res.status(200).send(subscriptionDataResponse.response);
                 return;
             }
 
+            const hasRemnawaveTemplates = parsedSubscription.some((item) =>
+                containsPlaceHolderFromVnext(item),
+            );
+
+            let normalizedSubscription = parsedSubscription;
+            if (hasRemnawaveTemplates) {
+                const userId = getUserId(parsedSubscription);
+                if (!userId) {
+                    this.logger.warn('User UUID is not found in subscription response');
+                } else {
+                    normalizedSubscription = replaceUuidPlaceholder(parsedSubscription, userId);
+                }
+            }
+
             const responseWithTemplates =
-                this.customTemplateInjectorService.injectTemplates(parsedSubscription);
+                this.customTemplateInjectorService.injectTemplates(normalizedSubscription);
 
             const responseBody = JSON.stringify(responseWithTemplates);
             // Override upstream cache validators so clients revalidate against the final payload.
