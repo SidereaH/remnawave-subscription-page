@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import {
     getFirstUserIdFromVnext,
     replaceUuidPlaceholder,
+    containsPlaceHolderFromVnext
 } from '@common/utils/auto-balancer/process-uuid-from-subscription';
 
 type TSubscriptionStatus =
@@ -114,12 +115,21 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
             preparedTemplates.push(replaceUuidPlaceholder(templateObject, userId));
         }
         //если в подписке есть <UUID> плейсхолдеры, в них тоже заменим id
-        const patchedSubItems = replaceUuidPlaceholder(subscriptionItems, userId)
+        const patchedSubItems: unknown[] = []
+        if(containsPlaceHolderFromVnext(subscriptionItems)){
+                 patchedSubItems.push(replaceUuidPlaceholder(subscriptionItems, userId))
+        }
+
+         
         if (preparedTemplates.length === 0) {
             return subscriptionItems;
         }
 
+        if(patchedSubItems.length === 0){
+            return [...preparedTemplates, ...subscriptionItems];
+        }
         return [...preparedTemplates, ...patchedSubItems];
+        
     }
 
     private resolveTemplateNames(detectedStatus: TSubscriptionStatus | null): string[] {
