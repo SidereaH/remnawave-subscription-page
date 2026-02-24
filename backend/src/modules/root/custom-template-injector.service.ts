@@ -110,15 +110,16 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
                 this.logger.warn(`Template "${templateName}" is not loaded, skip`);
                 continue;
             }
-
+            //добавляем шаблоны в массив
             preparedTemplates.push(replaceUuidPlaceholder(templateObject, userId));
         }
-
+        //если в подписке есть <UUID> плейсхолдеры, в них тоже заменим id
+        const patchedSubItems = replaceUuidPlaceholder(subscriptionItems, userId)
         if (preparedTemplates.length === 0) {
             return subscriptionItems;
         }
 
-        return [...preparedTemplates, ...subscriptionItems];
+        return [...preparedTemplates, ...patchedSubItems];
     }
 
     private resolveTemplateNames(detectedStatus: TSubscriptionStatus | null): string[] {

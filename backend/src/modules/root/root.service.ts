@@ -128,7 +128,7 @@ export class RootService {
                 res.status(200).send(subscriptionDataResponse.response);
                 return;
             }
-
+            //сюда залетают темплейты
             const responseWithTemplates =
                 this.customTemplateInjectorService.injectTemplates(parsedSubscription);
 
