@@ -1,10 +1,7 @@
-import { RawAxiosResponseHeaders } from 'axios';
-import { AxiosResponseHeaders } from 'axios';
 import { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
 
-import { ConfigService } from '@nestjs/config';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Logger } from '@nestjs/common';
@@ -17,6 +14,7 @@ import {
     replaceUuidPlaceholder,
 } from '@common/utils/auto-balancer';
 import { parseArrayResponse } from '@common/utils/json/parse-json';
+import { TypedConfigService } from '@common/config/app-config';
 import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
@@ -29,19 +27,22 @@ export class RootService {
 
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
-
+    private readonly mlDropRevokedSubscriptions: boolean;
     constructor(
-        private readonly configService: ConfigService,
+        private readonly configService: TypedConfigService,
         private readonly jwtService: JwtService,
         private readonly axiosService: AxiosService,
         private readonly customTemplateInjectorService: CustomTemplateInjectorService,
         private readonly subpageConfigService: SubpageConfigService,
     ) {
-        this.isMarzbanLegacyLinkEnabled = this.configService.getOrThrow<boolean>(
+        this.isMarzbanLegacyLinkEnabled = this.configService.getOrThrow(
             'MARZBAN_LEGACY_LINK_ENABLED',
         );
+        this.mlDropRevokedSubscriptions = this.configService.getOrThrow(
+            'MARZBAN_LEGACY_DROP_REVOKED_SUBSCRIPTIONS',
+        );
 
-        const marzbanSecretKeys = this.configService.get<string>('MARZBAN_LEGACY_SECRET_KEY');
+        const marzbanSecretKeys = this.configService.get('MARZBAN_LEGACY_SECRET_KEY');
 
         if (marzbanSecretKeys && marzbanSecretKeys.length > 0) {
             this.marzbanSecretKeys = marzbanSecretKeys.split(',').map((key) => key.trim());
@@ -88,6 +89,12 @@ export class RootService {
 
                         res.socket?.destroy();
                         return;
+                    } else if (
+                        this.mlDropRevokedSubscriptions &&
+                        userInfo.response.response.subRevokedAt !== null
+                    ) {
+                        res.socket?.destroy();
+                        return;
                     }
 
                     shortUuidLocal = userInfo.response.response.shortUuid;
@@ -98,12 +105,8 @@ export class RootService {
                 return this.returnWebpage(clientIp, req, res, shortUuidLocal);
             }
 
-            let subscriptionDataResponse: {
-                response: unknown;
-                headers: RawAxiosResponseHeaders | AxiosResponseHeaders;
-            } | null = null;
             //здесь мы получаем и отправляем нашу подписку
-            subscriptionDataResponse = await this.axiosService.getSubscription(
+            const subscriptionDataResponse = await this.axiosService.getSubscription(
                 clientIp,
                 shortUuidLocal,
                 req.headers,
@@ -156,6 +159,7 @@ export class RootService {
             const etag = createHash('sha256').update(responseBody).digest('hex');
             res.setHeader('ETag', `"${etag}"`);
             res.status(200).send(responseBody);
+            return;
         } catch (error) {
             this.logger.error('Error in serveSubscriptionPage', error);
 
@@ -265,7 +269,7 @@ export class RootService {
                 panelData: Buffer.from(JSON.stringify(subscriptionData)).toString('base64'),
             });
         } catch (error) {
-            this.logger.error('Error in returnWebpage', error);
+            this.logger.error(`Error in returnWebpage: ${error}`);
 
             res.socket?.destroy();
             return;
@@ -388,9 +392,7 @@ export class RootService {
     }
 
     private checkSubscriptionValidity(createdAt: Date, username: string): boolean {
-        const validFrom = this.configService.get<string | undefined>(
-            'MARZBAN_LEGACY_SUBSCRIPTION_VALID_FROM',
-        );
+        const validFrom = this.configService.get('MARZBAN_LEGACY_SUBSCRIPTION_VALID_FROM');
 
         if (!validFrom) {
             return true;
