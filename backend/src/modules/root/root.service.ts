@@ -149,8 +149,10 @@ export class RootService {
                 }
             }
 
-            const responseWithTemplates =
-                this.customTemplateInjectorService.injectTemplates(normalizedSubscription);
+            const responseWithTemplates = this.customTemplateInjectorService.injectTemplates(
+                normalizedSubscription,
+                subscriptionDataResponse.headers,
+            );
 
             const responseBody = JSON.stringify(responseWithTemplates);
             // Override upstream cache validators so clients revalidate against the final payload.

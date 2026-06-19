@@ -8,27 +8,15 @@ import {
     getUserId,
     replaceUuidPlaceholder,
 } from '@common/utils/auto-balancer/process-uuid-from-subscription';
-
-type TSubscriptionStatus =
-    | 'HWID'
-    | 'EXPIRED'
-    | 'DISABLED'
-    | 'HWID_NOT_SUPPORTED'
-    | 'LIMITED'
-    | 'DEFAULT';
-
-const STATUS_ORDER: TSubscriptionStatus[] = [
-    'HWID',
-    'EXPIRED',
-    'DISABLED',
-    'HWID_NOT_SUPPORTED',
-    'LIMITED',
-    'DEFAULT',
-];
+import {
+    detectStatusFlags,
+    STATUS_ORDER,
+    TSubscriptionHeaders,
+    TSubscriptionStatus,
+} from '@common/utils/subscription-status';
 
 type TStatusRule = {
     enabled: boolean;
-    keywords: string[];
     templates: string[];
 };
 
@@ -48,10 +36,6 @@ function toStringArray(value: unknown): string[] {
     return value
         .filter((item): item is string => typeof item === 'string')
         .map((item) => item.trim());
-}
-
-function toLowerCaseArray(value: unknown): string[] {
-    return toStringArray(value).map((item) => item.toLowerCase());
 }
 
 @Injectable()
@@ -85,7 +69,10 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
         this.logger.log('[OK] Custom template injector loaded');
     }
 
-    public injectTemplates(subscriptionItems: unknown[]): unknown[] {
+    public injectTemplates(
+        subscriptionItems: unknown[],
+        headers: TSubscriptionHeaders,
+    ): unknown[] {
         if (!this.isEnabled || !this.loadedConfig) {
             return subscriptionItems;
         }
@@ -98,7 +85,7 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
             return subscriptionItems;
         }
 
-        const detectedStatus = this.detectStatus(subscriptionItems);
+        const detectedStatus = this.detectStatus(headers);
         const templateNames = this.resolveTemplateNames(detectedStatus);
 
         if (templateNames.length === 0) {
@@ -143,11 +130,10 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
         return rule.templates;
     }
 
-    private detectStatus(subscriptionItems: unknown[]): TSubscriptionStatus | null {
+    private detectStatus(headers: TSubscriptionHeaders): TSubscriptionStatus | null {
         if (!this.loadedConfig) return null;
 
-        const remarks = this.extractRemarks(subscriptionItems);
-        if (remarks.length === 0) return null;
+        const statusFlags = detectStatusFlags(headers);
 
         for (const status of this.loadedConfig.statusPriority) {
             if (status === 'DEFAULT') {
@@ -156,36 +142,17 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
 
             const rule = this.loadedConfig.statusRules[status];
 
-            if (!rule.enabled || rule.keywords.length === 0) {
+            if (!rule.enabled) {
                 continue;
             }
 
-            const found = remarks.some((remark) =>
-                rule.keywords.some((keyword) => remark.includes(keyword)),
-            );
-
-            if (found) {
-                this.logger.debug(`Detected subscription status "${status}" by remarks`);
+            if (statusFlags[status]) {
+                this.logger.debug(`Detected subscription status "${status}" by headers`);
                 return status;
             }
         }
 
         return null;
-    }
-
-    private extractRemarks(subscriptionItems: unknown[]): string[] {
-        const remarks: string[] = [];
-
-        for (const item of subscriptionItems) {
-            if (!isRecord(item)) continue;
-
-            const remarkValue = item.remarks;
-            if (typeof remarkValue !== 'string') continue;
-
-            remarks.push(remarkValue.toLowerCase());
-        }
-
-        return remarks;
     }
 
     private loadConfig(): TLoadedInjectorConfig | null {
@@ -244,7 +211,6 @@ export class CustomTemplateInjectorService implements OnApplicationBootstrap {
 
                 statusRules[status] = {
                     enabled: statusRaw.enabled === true,
-                    keywords: toLowerCaseArray(statusRaw.keywords),
                     templates: toStringArray(statusRaw.templates),
                 };
             }
